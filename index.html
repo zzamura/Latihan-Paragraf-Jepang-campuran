@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Latihan Paragraf Jepang - Realtime</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;600&family=Noto+Sans+JP:wght@700&display=swap');
+        
+        body {
+            font-family: 'Lexend', sans-serif;
+            background: #f1f5f9;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 0;
+        }
+
+        .jp-font {
+            font-family: 'Noto Sans JP', sans-serif;
+            font-size: 3.5rem;
+            line-height: 1.4;
+            word-break: break-all;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.2rem;
+        }
+
+        .char-unit {
+            transition: color 0.2s ease, transform 0.2s ease;
+        }
+
+        .char-correct {
+            color: #10b981; /* Green-500 */
+            filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.2));
+        }
+
+        .char-error {
+            color: #ef4444; /* Red-500 */
+            animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        .char-pending {
+            color: #1f2937; /* Gray-800 */
+        }
+
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(2px, 0, 0); }
+            30%, 50%, 70% { transform: translate3d(-3px, 0, 0); }
+            40%, 60% { transform: translate3d(3px, 0, 0); }
+        }
+
+        .input-focus:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+        }
+
+        .correct-flash {
+            animation: success-pulse 0.5s ease-out;
+        }
+
+        @keyframes success-pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.02); background-color: #ecfdf5; }
+            100% { transform: scale(1); }
+        }
+
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+    </style>
+</head>
+<body class="p-4">
+
+    <div id="app" class="max-w-3xl w-full bg-white rounded-3xl shadow-2xl p-8 border border-gray-100">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-xl font-extrabold text-indigo-600 uppercase tracking-tighter italic">Live Correction Mode</h1>
+                <p class="text-xs text-gray-400">Hijau = Benar | Merah = Salah | Abu = Belum</p>
+            </div>
+            <div class="text-right">
+                <span id="char-count" class="text-xs font-bold bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full">0 Karakter</span>
+            </div>
+        </div>
+
+        <!-- Display Area (Paragraf dengan Span Per Karakter) -->
+        <div id="display-container" class="mb-8 p-10 bg-gray-50 rounded-2xl border-2 border-indigo-50 min-h-[220px] flex items-center justify-center relative overflow-hidden transition-all">
+            <div id="jp-word-container" class="jp-font select-none">
+                <!-- Karakter akan di-generate di sini oleh JS -->
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="space-y-4">
+            <div class="flex justify-between items-end ml-1">
+                <label class="text-sm font-semibold text-gray-500">Ketik Romaji Di Sini:</label>
+                <div id="debug-text" class="text-[10px] text-gray-300 font-mono italic"></div>
+            </div>
+            <textarea 
+                id="user-input" 
+                autofocus
+                autocomplete="off"
+                placeholder="fukonise..."
+                class="w-full h-24 text-2xl font-bold py-4 px-6 border-2 border-gray-200 rounded-2xl input-focus transition-all resize-none custom-scroll tracking-widest"
+            ></textarea>
+        </div>
+
+        <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex gap-2">
+                <span class="px-3 py-1 bg-green-50 text-green-600 rounded-lg text-[10px] font-bold border border-green-100">AUTO-CHECK ACTIVE</span>
+            </div>
+            <button onclick="generateParagraph()" class="flex items-center gap-2 text-gray-400 hover:text-indigo-600 text-sm font-semibold transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Generate Ulang
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const hiragana = {
+            'a': 'あ', 'i': 'い', 'u': 'う', 'e': 'え', 'o': 'お',
+            'ka': 'か', 'ki': 'き', 'ku': 'く', 'ke': 'け', 'ko': 'こ',
+            'sa': 'さ', 'shi': 'し', 'su': 'す', 'se': 'せ', 'so': 'そ',
+            'ta': 'た', 'chi': 'ち', 'tsu': 'つ', 'te': 'て', 'to': 'と',
+            'na': 'な', 'ni': 'に', 'nu': 'ぬ', 'ne': 'ね', 'no': 'の',
+            'ha': 'は', 'hi': 'ひ', 'fu': 'ふ', 'he': 'へ', 'ho': 'ほ',
+            'ma': 'ま', 'mi': 'み', 'mu': 'む', 'me': 'め', 'mo': 'も',
+            'ya': 'や', 'yu': 'ゆ', 'yo': 'よ',
+            'ra': 'ら', 'ri': 'り', 'ru': 'る', 're': 'れ', 'ro': 'ろ',
+            'wa': 'わ', 'wo': 'を', 'n': 'ん'
+        };
+
+        const katakana = {
+            'a': 'ア', 'i': 'イ', 'u': 'ウ', 'e': 'エ', 'o': 'オ',
+            'ka': 'カ', 'ki': 'キ', 'ku': 'ク', 'ke': 'ケ', 'ko': 'コ',
+            'sa': 'サ', 'shi': 'シ', 'su': 'ス', 'se': 'セ', 'so': 'ソ',
+            'ta': 'タ', 'chi': 'チ', 'tsu': 'ツ', 'te': 'テ', 'to': 'ト',
+            'na': 'ナ', 'ni': 'ニ', 'nu': 'ヌ', 'ne': 'ネ', 'no': 'ノ',
+            'ha': 'ハ', 'hi': 'ヒ', 'fu': 'フ', 'he': 'ヘ', 'ho': 'ホ',
+            'ma': 'マ', 'mi': 'ミ', 'mu': 'ム', 'me': 'メ', 'mo': 'モ',
+            'ya': 'ヤ', 'yu': 'ユ', 'yo': 'ヨ',
+            'ra': 'ラ', 'ri': 'リ', 'ru': 'ル', 're': 'レ', 'ro': 'ロ',
+            'wa': 'ワ', 'wo': 'ヲ', 'n': 'ン'
+        };
+
+        const hKeys = Object.keys(hiragana);
+        const kKeys = Object.keys(katakana);
+
+        let activeParagraph = []; // Menyimpan array of objects {char, romaji}
+        const containerEl = document.getElementById('jp-word-container');
+        const inputEl = document.getElementById('user-input');
+        const countEl = document.getElementById('char-count');
+        const displayBox = document.getElementById('display-container');
+
+        function generateParagraph() {
+            let length = Math.floor(Math.random() * 5) + 15; 
+            activeParagraph = [];
+            containerEl.innerHTML = "";
+            
+            for(let i = 0; i < length; i++) {
+                const useHiragana = Math.random() > 0.5;
+                const dict = useHiragana ? hiragana : katakana;
+                const keys = useHiragana ? hKeys : kKeys;
+                const romaji = keys[Math.floor(Math.random() * keys.length)];
+                
+                activeParagraph.push({
+                    char: dict[romaji],
+                    romaji: romaji
+                });
+
+                const span = document.createElement('span');
+                span.innerText = dict[romaji];
+                span.id = `char-${i}`;
+                span.className = "char-unit char-pending";
+                containerEl.appendChild(span);
+            }
+
+            countEl.innerText = `${length} Karakter`;
+            inputEl.value = "";
+            inputEl.focus();
+        }
+
+        inputEl.addEventListener('input', (e) => {
+            const userInput = e.target.value.toLowerCase().replace(/\s/g, '');
+            let currentRomajiProgress = "";
+            let errorFound = false;
+
+            for (let i = 0; i < activeParagraph.length; i++) {
+                const span = document.getElementById(`char-${i}`);
+                const charRomaji = activeParagraph[i].romaji;
+                
+                // Gabungkan romaji sampai index ini untuk membandingkan dengan input
+                const previousFullRomaji = currentRomajiProgress;
+                currentRomajiProgress += charRomaji;
+
+                // Reset class
+                span.className = "char-unit";
+
+                if (userInput.length === 0) {
+                    span.classList.add('char-pending');
+                    continue;
+                }
+
+                // Jika input user sudah melewati panjang total romaji sampai karakter ini
+                if (userInput.length >= currentRomajiProgress.length) {
+                    // Cek apakah bagian input yang sesuai dengan karakter ini benar
+                    const sliceInput = userInput.substring(previousFullRomaji.length, currentRomajiProgress.length);
+                    if (sliceInput === charRomaji) {
+                        span.classList.add('char-correct');
+                    } else {
+                        span.classList.add('char-error');
+                        errorFound = true;
+                    }
+                } 
+                // Jika input user baru sampai di tengah-tengah romaji karakter ini
+                else if (userInput.length > previousFullRomaji.length) {
+                    const partialInput = userInput.substring(previousFullRomaji.length);
+                    if (charRomaji.startsWith(partialInput)) {
+                        span.classList.add('char-pending'); // Masih proses
+                    } else {
+                        span.classList.add('char-error');
+                        errorFound = true;
+                    }
+                }
+                else {
+                    span.classList.add('char-pending');
+                }
+            }
+
+            // Jika seluruh teks benar
+            if (!errorFound && userInput === currentRomajiProgress) {
+                displayBox.classList.add('correct-flash');
+                setTimeout(() => {
+                    displayBox.classList.remove('correct-flash');
+                    generateParagraph();
+                }, 500);
+            }
+        });
+
+        window.onload = generateParagraph;
+    </script>
+</body>
+</html>
